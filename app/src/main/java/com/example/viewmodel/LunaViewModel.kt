@@ -46,6 +46,9 @@ class LunaViewModel(application: Application) : AndroidViewModel(application) {
     val supportNotes: StateFlow<List<SupportNote>> = repository.supportNotes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val symptomLogs: StateFlow<List<SymptomLog>> = repository.symptomLogs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Pin Authenticated State for Secure App Lock
     private val _isPinAuthenticated = MutableStateFlow(false)
     val isPinAuthenticated: StateFlow<Boolean> = _isPinAuthenticated.asStateFlow()
@@ -545,6 +548,32 @@ class LunaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearNavigationHistory() {
         _navigationHistory.value = emptyList()
+    }
+
+    // ==========================================
+    // SYMPTOM LOGGING METHODS
+    // ==========================================
+    fun addSymptomLog(
+        date: String,
+        symptomName: String,
+        severity: Int,
+        notes: String? = null
+    ) {
+        viewModelScope.launch {
+            val log = SymptomLog(
+                date = date,
+                symptomName = symptomName,
+                severity = severity,
+                notes = notes
+            )
+            repository.insertSymptomLog(log)
+        }
+    }
+
+    fun deleteSymptomLog(id: Int) {
+        viewModelScope.launch {
+            repository.deleteSymptomLog(id)
+        }
     }
 }
 

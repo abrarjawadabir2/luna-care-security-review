@@ -125,3 +125,16 @@ interface SupportNoteDao {
     @Query("DELETE FROM support_notes WHERE id = :id")
     suspend fun deleteSupportNote(id: Int)
 }
+
+@Dao
+interface SymptomLogDao {
+    @Query("SELECT * FROM symptom_logs ORDER BY date DESC")
+    fun getAllSymptomLogs(): Flow<List<SymptomLog>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSymptomLog(log: SymptomLog)
+
+    @Query("DELETE FROM symptom_logs WHERE id = :id")
+    suspend fun deleteSymptomLog(id: Int)
+}
+

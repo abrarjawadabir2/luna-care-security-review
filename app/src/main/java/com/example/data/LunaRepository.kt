@@ -13,6 +13,7 @@ class LunaRepository(private val db: LunaDatabase) {
     private val behaviourLogDao = db.behaviourLogDao()
     private val cupCareLogDao = db.cupCareLogDao()
     private val supportNoteDao = db.supportNoteDao()
+    private val symptomLogDao = db.symptomLogDao()
 
     val profile: Flow<Profile?> = profileDao.getProfile()
     val periodLogs: Flow<List<PeriodLog>> = periodLogDao.getAllPeriodLogs()
@@ -24,6 +25,7 @@ class LunaRepository(private val db: LunaDatabase) {
     val behaviourLogs: Flow<List<BehaviourLog>> = behaviourLogDao.getAllBehaviourLogs()
     val cupCareLogs: Flow<List<CupCareLog>> = cupCareLogDao.getAllCupCareLogs()
     val supportNotes: Flow<List<SupportNote>> = supportNoteDao.getAllSupportNotes()
+    val symptomLogs: Flow<List<SymptomLog>> = symptomLogDao.getAllSymptomLogs()
 
     suspend fun getProfileSync(): Profile? = profileDao.getProfileSync()
 
@@ -103,6 +105,14 @@ class LunaRepository(private val db: LunaDatabase) {
 
     suspend fun deleteSupportNote(id: Int) {
         supportNoteDao.deleteSupportNote(id)
+    }
+
+    suspend fun insertSymptomLog(log: SymptomLog) {
+        symptomLogDao.insertSymptomLog(log)
+    }
+
+    suspend fun deleteSymptomLog(id: Int) {
+        symptomLogDao.deleteSymptomLog(id)
     }
 
     suspend fun clearAllData() {

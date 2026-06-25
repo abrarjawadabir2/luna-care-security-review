@@ -1296,6 +1296,18 @@ fun DashboardTab(
 ) {
     val periodLogs by viewModel.periodLogs.collectAsState()
     val moodLogs by viewModel.moodLogs.collectAsState()
+    val symptomLogs by viewModel.symptomLogs.collectAsState()
+    var showTrendTracker by rememberSaveable { mutableStateOf(false) }
+
+    if (showTrendTracker) {
+        SymptomTrendTrackerComponent(
+            viewModel = viewModel,
+            symptomLogs = symptomLogs,
+            periodLogs = periodLogs,
+            onBack = { showTrendTracker = false }
+        )
+        return
+    }
 
     val lastLog = periodLogs.maxByOrNull { it.startDate }
     val todayStr = CycleUtils.getTodayString()
@@ -1711,6 +1723,63 @@ fun DashboardTab(
                                 text = "• ${randomTip.steps.first()}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                // Dedicated Symptom Trends Quick Insights Card
+                item {
+                    val recentLogsCount = symptomLogs.size
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth().testTag("dashboard_trends_shortcut_card"),
+                        onClick = { showTrendTracker = true }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Analytics,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Cycle & Symptom Trends",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = "View Details",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Text(
+                                text = "Visual Symptom Tracker",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                            
+                            val promptText = if (recentLogsCount > 0) {
+                                "You have $recentLogsCount logged symptoms. Click to analyze frequency distribution, comparative monthly statistics, and phase correlations."
+                            } else {
+                                "Track frequency of symptoms over the last three months. Explore visual analytics, phase correlations, and offline logs."
+                            }
+                            
+                            Text(
+                                text = promptText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(vertical = 4.dp)
                             )
                         }
                     }
@@ -2241,6 +2310,9 @@ fun CycleTab(
     viewModel: LunaViewModel
 ) {
     val periodLogs by viewModel.periodLogs.collectAsState()
+    val symptomLogs by viewModel.symptomLogs.collectAsState()
+
+    var selectedCalendarDate by remember { mutableStateOf(java.time.LocalDate.now()) }
 
     var showLogDialog by remember { mutableStateOf(false) }
 
@@ -2338,8 +2410,6 @@ fun CycleTab(
             val firstDayOfWeekIndex = if (firstDayOfWeekObj.value == 7) 0 else firstDayOfWeekObj.value // Sunday = 0, Monday = 1...
             
             val totalCells = firstDayOfWeekIndex + daysInMonth
-            
-            var selectedCalendarDate by remember { mutableStateOf<java.time.LocalDate?>(java.time.LocalDate.now()) }
             
             Card(
                 modifier = Modifier.fillMaxWidth().testTag("visual_cycle_calendar"),
@@ -2645,6 +2715,15 @@ fun CycleTab(
                     }
                 }
             }
+        }
+
+        // Physical Symptoms Logger Linked to Cycle Date
+        item {
+            SymptomLoggerComponent(
+                viewModel = viewModel,
+                symptomLogs = symptomLogs,
+                selectedDate = selectedCalendarDate
+            )
         }
 
         // Period Log History

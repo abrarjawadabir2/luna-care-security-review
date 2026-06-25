@@ -146,3 +146,13 @@ data class MedicalReminder(
     val startDate: String? = null,
     val endDate: String? = null
 )
+
+@Entity(tableName = "symptom_logs")
+data class SymptomLog(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val date: String, // YYYY-MM-DD
+    val symptomName: String, // Cramps, Headache, Fatigue, Bloating, Backache, Mood swings, Acne, Breast tenderness, Nausea, Insomnia, etc.
+    val severity: Int, // 1-5 or 1-10 (let's say 1-5 for standard severity)
+    val notes: String? = null
+)
+
