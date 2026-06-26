@@ -417,6 +417,25 @@ class LunaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addJournalEntryWithDate(
+        date: String,
+        title: String,
+        body: String,
+        moodTag: String?
+    ) {
+        viewModelScope.launch {
+            repository.insertJournalEntry(
+                JournalEntry(
+                    date = date,
+                    title = title,
+                    body = body,
+                    moodTag = moodTag,
+                    cyclePhase = null
+                )
+            )
+        }
+    }
+
     fun deleteJournalEntry(id: Int) {
         viewModelScope.launch {
             repository.deleteJournalEntry(id)
