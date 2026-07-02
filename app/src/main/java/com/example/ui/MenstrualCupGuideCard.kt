@@ -110,7 +110,8 @@ fun MenstrualCupGuideCard(
                     "🎓 Walkthroughs",
                     "📐 Folding Guide",
                     "🧼 Clean & Setup",
-                    "🧠 Safety Quiz"
+                    "🧠 Safety Quiz",
+                    "❓ FAQs & Tips"
                 ).forEachIndexed { index, title ->
                     Tab(
                         selected = activeTab == index,
@@ -147,6 +148,7 @@ fun MenstrualCupGuideCard(
                         isReady = isReady
                     )
                     3 -> CupQuizSection()
+                    4 -> CupFaqSection()
                 }
             }
         }
@@ -1387,3 +1389,370 @@ data class QuizQuestion(
     val correctIndex: Int,
     val explanation: String
 )
+
+// ==========================================
+// 5. EDUCATIONAL FAQ & INSTRUCTIONAL TIPS SECTION
+// ==========================================
+data class FaqItemData(
+    val question: String,
+    val answer: String,
+    val category: String,
+    val keywords: List<String>
+)
+
+data class InstructionalTip(
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val description: String,
+    val color: Color
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CupFaqSection() {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFaqCategory by remember { mutableStateOf("All") }
+    
+    // State of expanded FAQ items: holds the questions that are currently expanded
+    val expandedStates = remember { mutableStateMapOf<String, Boolean>() }
+
+    val faqs = listOf(
+        FaqItemData(
+            question = "How do I know if my menstrual cup is fully open?",
+            category = "Usage & Fit",
+            answer = "Slide a clean finger around the base of the cup after insertion. If you feel any folds, creases, or a flat side, the cup hasn't popped open fully. You can gently grab the base of the cup (not the stem) and rotate it 360 degrees, or do a few light squats to encourage it to expand.",
+            keywords = listOf("open", "seal", "suction", "flat", "leak")
+        ),
+        FaqItemData(
+            question = "Can a menstrual cup get lost inside me?",
+            category = "Safety & Hygiene",
+            answer = "No. The vagina is a closed canal, and the cervix acts as a physical barrier at the top. The cup cannot go past the cervix. If the cup rises too high to reach, stay calm, take a deep breath, squat down deeply on the toilet, and gently bear down with your pelvic muscles to push it lower.",
+            keywords = listOf("lost", "cervix", "disappear", "high")
+        ),
+        FaqItemData(
+            question = "How often do I need to empty the menstrual cup?",
+            category = "Safety & Hygiene",
+            answer = "Most manufacturers recommend emptying the cup every 8 to 12 hours. Even if you have a light flow, do not exceed 12 hours of continuous wear to prevent bacterial growth and toxic shock syndrome (TSS) risk.",
+            keywords = listOf("hours", "empty", "frequency", "time", "tss")
+        ),
+        FaqItemData(
+            question = "Can I use a menstrual cup if I have an IUD?",
+            category = "Safety & Hygiene",
+            answer = "Yes, but with extra caution! Always break the vacuum seal completely before pulling the cup down to avoid dislodging the IUD strings. You can also ask your gynecologist to trim the IUD strings slightly shorter so they do not get caught under the rim.",
+            keywords = listOf("iud", "strings", "birth control", "dislodge")
+        ),
+        FaqItemData(
+            question = "Does inserting the cup hurt?",
+            category = "Usage & Fit",
+            answer = "It shouldn't hurt, but there may be minor discomfort when you are first learning. Using a small drop of water or water-based lubricant on the rim of the folded cup can make insertion incredibly smooth. Remember to breathe and relax your pelvic muscles.",
+            keywords = listOf("pain", "hurt", "lubricant", "discomfort", "tight")
+        ),
+        FaqItemData(
+            question = "How do I clean my cup in a public restroom?",
+            category = "Safety & Hygiene",
+            answer = "Wash your hands first before entering the stall. Take a small water bottle inside the stall with you. Remove the cup, empty it into the toilet, and rinse it over the toilet bowl using the water bottle. Alternatively, simply wipe the cup clean with a sterile, fragrance-free wet wipe and reinsert, then wash it thoroughly when you get home.",
+            keywords = listOf("public", "restroom", "toilet", "rinse", "travel")
+        ),
+        FaqItemData(
+            question = "What should I do if my cup is leaking?",
+            category = "Troubleshooting",
+            answer = "Leaks usually mean the cup didn't seal properly, is positioned incorrectly, or is full. Double check that the cup has popped open fully, and try aiming it slightly backward towards your tailbone instead of straight up. Also, make sure the tiny air holes near the rim are completely clear and clean.",
+            keywords = listOf("leak", "spill", "spotting", "holes")
+        )
+    )
+
+    val proTips = listOf(
+        InstructionalTip(
+            title = "Cup Sizing Advice",
+            icon = Icons.Default.Straighten,
+            description = "Small cups are typically recommended for users under 30 who haven't given birth vaginally. Large cups are for users over 30 or who have given birth vaginally. Cervix height also matters: if your cervix is very low or high, search for custom short-body or long-body cup designs.",
+            color = MutedRosePrimary
+        ),
+        InstructionalTip(
+            title = "Trimming the Stem",
+            icon = Icons.Default.ContentCut,
+            description = "If the silicone stem of the cup is poking you or sticking out, causing localized skin irritation, you can safely trim it! Remove the cup first, use sanitized scissors to cut a small section of the stem, and reinsert. Never trim it while inside you.",
+            color = LavenderSecondary
+        ),
+        InstructionalTip(
+            title = "The Metal Whisk Boil",
+            icon = Icons.Default.Whatshot,
+            description = "When boiling your cup to sterilize, place it inside a clean metal kitchen whisk. This suspends the cup in the boiling water and prevents the silicone from touching the hot metal bottom of the pot, which can warp or melt the silicone.",
+            color = SuccessGreen
+        )
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Section Header
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Clinical Menstrual Cup FAQ & Tips 💬",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Learn best practices, troubleshoot leaks, and master cup comfort with medical-grade guidance.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Search Bar
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search FAQ (e.g. leak, lost, IUD, pain...)") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear search")
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("faq_search_input"),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+            )
+        )
+
+        // FAQ Category Filter Row
+        val categories = listOf("All", "Usage & Fit", "Safety & Hygiene", "Troubleshooting")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            categories.forEach { category ->
+                val isSelected = selectedFaqCategory == category
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                        .border(
+                            width = if (isSelected) 1.2.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .clickable { selectedFaqCategory = category }
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = category.split(" ")[0], // Use short title
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // Toggleable FAQ List
+        val filteredFaqs = faqs.filter { faq ->
+            val matchesCategory = selectedFaqCategory == "All" || faq.category == selectedFaqCategory
+            val matchesSearch = searchQuery.isBlank() || 
+                    faq.question.contains(searchQuery, ignoreCase = true) || 
+                    faq.answer.contains(searchQuery, ignoreCase = true) ||
+                    faq.keywords.any { it.contains(searchQuery, ignoreCase = true) }
+            matchesCategory && matchesSearch
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Toggle FAQs:",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (filteredFaqs.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f))
+                ) {
+                    Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "No matching FAQ items found.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                filteredFaqs.forEach { faq ->
+                    val isExpanded = expandedStates[faq.question] == true
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expandedStates[faq.question] = !isExpanded }
+                            .testTag("faq_card_${faq.question.hashCode()}"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.surface
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(0.9f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "?",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                    Text(
+                                        text = faq.question,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            AnimatedVisibility(
+                                visible = isExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(modifier = Modifier.padding(top = 10.dp)) {
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    Text(
+                                        text = faq.answer,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 17.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.15f),
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = faq.category,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+        // Instructional Pro Tips
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Clinical Instructional Tips:",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            proTips.forEach { tip ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = tip.color.copy(alpha = 0.04f)),
+                    border = BorderStroke(1.dp, tip.color.copy(alpha = 0.15f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(tip.color.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = tip.icon,
+                                contentDescription = null,
+                                tint = tip.color,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = tip.title,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = tip.color
+                            )
+                            Text(
+                                text = tip.description,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

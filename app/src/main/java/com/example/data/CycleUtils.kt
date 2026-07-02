@@ -139,6 +139,97 @@ object CycleUtils {
         }
     }
 
+    data class PredictionResult(
+        val nextPeriodDate: String?,
+        val predictedCycleLength: Int,
+        val isBasedOnHistory: Boolean,
+        val historicalCycleCount: Int,
+        val cycleLengthsUsed: List<Int>,
+        val currentCycleDay: Int?,
+        val daysUntil: Long?,
+        val phase: String,
+        val isOverdue: Boolean,
+        val overdueDays: Long
+    )
+
+    fun predictNextPeriod(
+        periodLogs: List<PeriodLog>,
+        profileAverageLength: Int,
+        profilePeriodLength: Int,
+        today: LocalDate = LocalDate.now()
+    ): PredictionResult {
+        val sortedDates = periodLogs
+            .mapNotNull { 
+                try { LocalDate.parse(it.startDate, formatter) } catch (e: Exception) { null } 
+            }
+            .distinct()
+            .sorted()
+
+        val cycleStarts = mutableListOf<LocalDate>()
+        for (date in sortedDates) {
+            if (cycleStarts.isEmpty() || ChronoUnit.DAYS.between(cycleStarts.last(), date) >= 14) {
+                cycleStarts.add(date)
+            }
+        }
+
+        val cycleLengths = mutableListOf<Int>()
+        for (i in 0 until cycleStarts.size - 1) {
+            val length = ChronoUnit.DAYS.between(cycleStarts[i], cycleStarts[i + 1]).toInt()
+            if (length in 18..45) { // Allow realistic physiological window
+                cycleLengths.add(length)
+            }
+        }
+
+        val isBasedOnHistory = cycleLengths.isNotEmpty()
+        val predictedCycleLength = if (isBasedOnHistory) {
+            cycleLengths.average().let { if (it.isNaN()) profileAverageLength else kotlin.math.round(it).toInt() }
+        } else {
+            profileAverageLength.coerceIn(21, 45)
+        }
+
+        val latestStart = cycleStarts.lastOrNull()
+        if (latestStart == null) {
+            return PredictionResult(
+                nextPeriodDate = null,
+                predictedCycleLength = predictedCycleLength,
+                isBasedOnHistory = false,
+                historicalCycleCount = 0,
+                cycleLengthsUsed = emptyList(),
+                currentCycleDay = null,
+                daysUntil = null,
+                phase = "Unknown",
+                isOverdue = false,
+                overdueDays = 0L
+            )
+        }
+
+        val immediateNext = latestStart.plusDays(predictedCycleLength.toLong())
+        val isOverdue = today.isAfter(immediateNext)
+        val overdueDays = if (isOverdue) ChronoUnit.DAYS.between(immediateNext, today) else 0L
+        val currentCycleDay = ChronoUnit.DAYS.between(latestStart, today).toInt() + 1
+        val daysUntil = ChronoUnit.DAYS.between(today, immediateNext)
+
+        val cycleDayInLength = if (currentCycleDay > predictedCycleLength) {
+            predictedCycleLength
+        } else {
+            currentCycleDay
+        }
+        val phase = getCyclePhase(cycleDayInLength, predictedCycleLength, profilePeriodLength)
+
+        return PredictionResult(
+            nextPeriodDate = immediateNext.format(formatter),
+            predictedCycleLength = predictedCycleLength,
+            isBasedOnHistory = isBasedOnHistory,
+            historicalCycleCount = cycleStarts.size,
+            cycleLengthsUsed = cycleLengths,
+            currentCycleDay = currentCycleDay,
+            daysUntil = daysUntil,
+            phase = phase,
+            isOverdue = isOverdue,
+            overdueDays = overdueDays
+        )
+    }
+
     val crisisKeywords = listOf(
         "suicide",
         "kill myself",

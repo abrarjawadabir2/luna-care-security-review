@@ -108,7 +108,9 @@ data class JournalEntry(
     val title: String,
     val body: String,
     val moodTag: String?,
-    val cyclePhase: String?
+    val cyclePhase: String?,
+    val category: String = "General",
+    val symptoms: String? = null
 )
 
 @Entity(tableName = "bookmarks")
@@ -155,4 +157,42 @@ data class SymptomLog(
     val severity: Int, // 1-5 or 1-10 (let's say 1-5 for standard severity)
     val notes: String? = null
 )
+
+@Entity(tableName = "user_credentials")
+data class UserCredentials(
+    @PrimaryKey val emailHash: String, // SHA-256 lookup
+    val encryptedEmail: String,        // AES-GCM encrypted
+    val passwordHash: String,          // PBKDF2 Hmac SHA-256 hash
+    val passwordSalt: String,          // Unique salt per user
+    val displayName: String,
+    val securityPinEnabled: Boolean = false,
+    val securityPin: String = "",
+    val isLoggedIn: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "login_security_events")
+data class LoginSecurityEvent(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val emailHash: String?,
+    val ipHash: String?,
+    val userAgentHash: String?,
+    val eventType: String, // LOGIN_FAILED, LOGIN_SUCCESS, RATE_LIMIT_TRIGGERED, CAPTCHA_REQUIRED, PASSWORD_RESET_REQUESTED, PASSWORD_RESET_SUCCESS, ACCOUNT_LOCKED_TEMPORARILY
+    val metadata: String?, // serialized JSON or normal string
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "account_security_state")
+data class AccountSecurityState(
+    @PrimaryKey val emailHash: String, // Key is emailHash
+    val userId: String? = null,
+    val failedAttemptCount: Int = 0,
+    val firstFailedAt: Long? = null,
+    val lastFailedAt: Long? = null,
+    val lockedUntil: Long? = null,
+    val captchaRequired: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 

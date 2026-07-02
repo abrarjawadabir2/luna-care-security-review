@@ -1,7 +1,7 @@
 package com.example.ui
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,12 +23,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -38,6 +41,27 @@ import com.example.data.CycleUtils
 import com.example.data.JournalEntry
 import com.example.ui.theme.*
 import com.example.viewmodel.LunaViewModel
+import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
+import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
+import com.patrykandpatrick.vico.compose.chart.Chart
+import com.patrykandpatrick.vico.compose.chart.line.lineChart
+import com.patrykandpatrick.vico.compose.style.ProvideChartStyle
+import com.patrykandpatrick.vico.core.axis.AxisPosition
+import com.patrykandpatrick.vico.core.axis.formatter.AxisValueFormatter
+import com.patrykandpatrick.vico.core.entry.entryModelOf
+import com.patrykandpatrick.vico.core.entry.FloatEntry
+import java.time.format.DateTimeFormatter
+
+private val JOURNAL_SYMPTOM_OPTIONS = listOf(
+    "Cramps" to "⚡",
+    "Headache" to "🧠",
+    "Fatigue" to "💤",
+    "Bloating" to "🎈",
+    "Backache" to "🩹",
+    "Nausea" to "🤢",
+    "Mood Swings" to "🎭",
+    "Insomnia" to "🦉"
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -50,8 +74,11 @@ fun InteractiveJournalingComponent(
     var journalTitle by remember { mutableStateOf("") }
     var journalBody by remember { mutableStateOf("") }
     var selectedMood by remember { mutableStateOf<MoodOption?>(null) }
+    var selectedCategory by remember { mutableStateOf("General") }
+    var selectedSymptoms by remember { mutableStateOf(setOf<String>()) }
     var searchKeyword by remember { mutableStateOf("") }
     var selectedMoodFilter by remember { mutableStateOf<String>("All") }
+    var selectedCategoryFilter by remember { mutableStateOf("All") }
     
     // UI Expand/Collapse states
     var isWritingActive by remember { mutableStateOf(false) }
@@ -65,6 +92,17 @@ fun InteractiveJournalingComponent(
         MoodOption("Tired", "💤", WarningAmber, WarningAmber.copy(alpha = 0.25f)),
         MoodOption("Low", "💧", Color(0xFF4A90E2), Color(0xFF4A90E2).copy(alpha = 0.2f)),
         MoodOption("Stressed", "⚡", AlertRed, AlertRed.copy(alpha = 0.15f))
+    )
+
+    val journalSymptomOptions = JOURNAL_SYMPTOM_OPTIONS
+
+    val moodAffirmations = mapOf(
+        "Radiant" to "Full of energy, sunshine, and positive vibes 🌟",
+        "Peaceful" to "Serene, content, and beautifully in flow 🌸",
+        "Calm" to "Grounded, quiet, and peacefully present 🍵",
+        "Tired" to "Low on energy, needing deep restorative rest 💤",
+        "Low" to "Quiet, gentle with yourself, emotional space needed 💧",
+        "Stressed" to "Feeling overwhelmed, taking a deep breath ⚡"
     )
 
     val reflectionPrompts = listOf(
@@ -262,41 +300,123 @@ fun InteractiveJournalingComponent(
                         )
                         
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             moods.forEach { option ->
                                 val isSelected = selectedMood == option
-                                Column(
+                                
+                                // Bouncy scaling animation for tactile physical feedback
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isSelected) 1.25f else 1.0f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.5f, // Highly organic bouncy feedback
+                                        stiffness = 250f
+                                    ),
+                                    label = "emojiScale"
+                                )
+
+                                // Upward float when selected
+                                val translationY by animateFloatAsState(
+                                    targetValue = if (isSelected) (-5f) else 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.6f,
+                                        stiffness = 300f
+                                    ),
+                                    label = "emojiTranslation"
+                                )
+
+                                Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) option.selectedColor else Color.Transparent)
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isSelected) option.primaryColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable { selectedMood = if (isSelected) null else option }
-                                        .padding(vertical = 10.dp, horizontal = 4.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                            this.translationY = translationY
+                                        }
+                                        .padding(horizontal = 4.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = option.emoji,
-                                        fontSize = 24.sp,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Text(
-                                        text = option.name,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) option.primaryColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) option.selectedColor 
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                            )
+                                            .border(
+                                                width = if (isSelected) 2.dp else 1.dp,
+                                                color = if (isSelected) option.primaryColor 
+                                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                                                shape = CircleShape
+                                            )
+                                            .clickable { 
+                                                selectedMood = if (isSelected) null else option 
+                                            }
+                                            .testTag("emoji_mood_button_${option.name}"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = option.emoji,
+                                            fontSize = 28.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
+                            }
+                        }
+
+                        // Beautiful animated description helper instead of crowded text lists
+                        AnimatedContent(
+                            targetState = selectedMood,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                            },
+                            label = "moodAffirmationContent"
+                        ) { targetMood ->
+                            if (targetMood != null) {
+                                val affirmation = moodAffirmations[targetMood.name] ?: "Logging ${targetMood.name}"
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = targetMood.selectedColor.copy(alpha = 0.15f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = targetMood.emoji,
+                                            fontSize = 18.sp
+                                        )
+                                        Column {
+                                            Text(
+                                                text = targetMood.name,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = targetMood.primaryColor
+                                            )
+                                            Text(
+                                                text = affirmation,
+                                                fontSize = 10.5.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = "✨ Tap an emoji to express how you are feeling right now",
+                                    fontSize = 11.sp,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                                )
                             }
                         }
 
@@ -410,6 +530,117 @@ fun InteractiveJournalingComponent(
                             }
                         }
 
+                        // 3. Physical Symptoms Checklist
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "3. Check Physical Symptoms",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Select any symptoms to correlate physical health with your mood:",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                        
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            journalSymptomOptions.forEach { (symptomName, emoji) ->
+                                val isSelected = selectedSymptoms.contains(symptomName)
+                                Card(
+                                    modifier = Modifier
+                                        .clickable {
+                                            selectedSymptoms = if (isSelected) {
+                                                selectedSymptoms - symptomName
+                                            } else {
+                                                selectedSymptoms + symptomName
+                                            }
+                                        }
+                                        .testTag("journal_symptom_chip_$symptomName"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    ),
+                                    border = BorderStroke(
+                                        width = 1.5.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(emoji, fontSize = 14.sp)
+                                        Text(
+                                            text = symptomName,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // D. Category Tagging Selection
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "4. Category Tag",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Tag your entry for easier organization and trends:",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                        
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            items(journalCategories) { cat ->
+                                val isSelected = selectedCategory == cat.name
+                                Card(
+                                    modifier = Modifier
+                                        .clickable { selectedCategory = cat.name }
+                                        .testTag("category_selector_${cat.name}"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) cat.color.copy(alpha = 0.15f)
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    ),
+                                    border = BorderStroke(
+                                        width = 1.5.dp,
+                                        color = if (isSelected) cat.color else Color.Transparent
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(cat.emoji, fontSize = 13.sp)
+                                        Text(
+                                            text = cat.name,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) cat.color else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         // Save Button
                         Button(
                             onClick = {
@@ -420,17 +651,27 @@ fun InteractiveJournalingComponent(
                                         journalTitle
                                     }
                                     
+                                    val symptomsString = if (selectedSymptoms.isNotEmpty()) {
+                                        selectedSymptoms.joinToString(",")
+                                    } else {
+                                        null
+                                    }
+                                    
                                     viewModel.addJournalEntry(
                                         title = finalTitle,
                                         body = journalBody,
                                         moodTag = selectedMood?.name,
-                                        cyclePhase = null
+                                        cyclePhase = null,
+                                        category = selectedCategory,
+                                        symptoms = symptomsString
                                     )
                                     
                                     // Reset fields
                                     journalTitle = ""
                                     journalBody = ""
                                     selectedMood = null
+                                    selectedCategory = "General"
+                                    selectedSymptoms = emptySet()
                                     isWritingActive = false
                                     showSuccessBanner = true
                                 }
@@ -542,7 +783,7 @@ fun InteractiveJournalingComponent(
                 modifier = Modifier.fillMaxWidth().testTag("journal_history_search")
             )
 
-            // Filter chips row
+            // Filter chips row (Moods)
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -573,6 +814,38 @@ fun InteractiveJournalingComponent(
                     )
                 }
             }
+
+            // Filter chips row (Categories)
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                item {
+                    FilterChip(
+                        selected = selectedCategoryFilter == "All",
+                        onClick = { selectedCategoryFilter = "All" },
+                        label = { Text("All Categories", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    )
+                }
+
+                items(journalCategories) { cat ->
+                    val isChecked = selectedCategoryFilter == cat.name
+                    FilterChip(
+                        selected = isChecked,
+                        onClick = { selectedCategoryFilter = if (isChecked) "All" else cat.name },
+                        label = { Text("${cat.emoji} ${cat.name}", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = cat.color.copy(alpha = 0.2f),
+                            selectedLabelColor = cat.color
+                        )
+                    )
+                }
+            }
         }
 
         // 5. Entries List
@@ -583,7 +856,9 @@ fun InteractiveJournalingComponent(
             
             val matchMood = selectedMoodFilter == "All" || entry.moodTag == selectedMoodFilter
             
-            matchKeyword && matchMood
+            val matchCategory = selectedCategoryFilter == "All" || entry.category == selectedCategoryFilter
+            
+            matchKeyword && matchMood && matchCategory
         }.sortedByDescending { it.date }
 
         if (filteredEntries.isEmpty()) {
@@ -607,14 +882,14 @@ fun InteractiveJournalingComponent(
                         modifier = Modifier.size(36.dp)
                     )
                     Text(
-                        text = if (searchKeyword.isNotEmpty() || selectedMoodFilter != "All") "No matches found" else "No reflections saved yet",
+                        text = if (searchKeyword.isNotEmpty() || selectedMoodFilter != "All" || selectedCategoryFilter != "All") "No matches found" else "No reflections saved yet",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (searchKeyword.isNotEmpty() || selectedMoodFilter != "All") 
-                            "Try modifying your filter or keyword to locate entries."
+                        text = if (searchKeyword.isNotEmpty() || selectedMoodFilter != "All" || selectedCategoryFilter != "All") 
+                            "Try modifying your filter, category, or keyword to locate entries."
                             else "Your logged moods and private thoughts will be safely listed here.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -658,12 +933,43 @@ fun InteractiveJournalingComponent(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     
-                                    Text(
-                                        text = CycleUtils.formatDisplayDate(entry.date),
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = CycleUtils.formatDisplayDate(entry.date),
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        
+                                        // Category Badge
+                                        val catObj = journalCategories.find { it.name == entry.category }
+                                        val displayEmoji = catObj?.emoji ?: "📝"
+                                        val displayColor = catObj?.color ?: Color.Gray
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(displayColor.copy(alpha = 0.12f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                Text(displayEmoji, fontSize = 9.sp)
+                                                Text(
+                                                    text = entry.category,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = displayColor
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                                 
                                 Row(
@@ -716,6 +1022,55 @@ fun InteractiveJournalingComponent(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 17.sp
                             )
+
+                            if (!entry.symptoms.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Logged Symptoms:",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        val symptomsList = entry.symptoms.split(",").filter { it.isNotBlank() }
+                                        symptomsList.forEach { symptom ->
+                                            val emoji = journalSymptomOptions.find { it.first == symptom }?.second ?: "⚡"
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                                                        shape = RoundedCornerShape(6.dp)
+                                                    )
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                ) {
+                                                    Text(emoji, fontSize = 9.sp)
+                                                    Text(
+                                                        text = symptom,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -919,6 +1274,166 @@ fun WellbeingTrendsDashboard(
             }
         }
 
+        // Physical Symptoms & Mood Correlations Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Physical Symptom & Mood Correlations",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Text(
+                    text = "Understand how your physical sensations relate to your logged emotional states.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+
+                val symptomEntries = journalEntries.filter { !it.symptoms.isNullOrBlank() }
+                
+                if (symptomEntries.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "💡 Log physical symptoms with your mood in the journal entry form above to unlock your correlation insights!",
+                            fontSize = 11.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    val symptomToMoods = mutableMapOf<String, MutableList<String>>()
+                    symptomEntries.forEach { entry ->
+                        val entrySymptoms = entry.symptoms?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+                        val entryMood = entry.moodTag
+                        if (entryMood != null) {
+                            entrySymptoms.forEach { symptom ->
+                                symptomToMoods.getOrPut(symptom) { mutableListOf() }.add(entryMood)
+                            }
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        symptomToMoods.forEach { (symptomName, moodList) ->
+                            val totalSymptomLogs = moodList.size
+                            val dominantMoodName = moodList.groupBy { it }.maxByOrNull { it.value.size }?.key
+                            val dominantMoodCount = moodList.count { it == dominantMoodName }
+                            val pct = (dominantMoodCount.toFloat() / totalSymptomLogs.toFloat() * 100).toInt()
+                            
+                            val matchingMoodOption = moods.find { it.name == dominantMoodName }
+                            val symptomEmoji = JOURNAL_SYMPTOM_OPTIONS.find { it.first == symptomName }?.second ?: "⚡"
+                            
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(symptomEmoji, fontSize = 18.sp)
+                                        }
+                                        
+                                        Column {
+                                            Text(
+                                                text = symptomName,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Logged $totalSymptomLogs ${if (totalSymptomLogs == 1) "time" else "times"}",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                        }
+                                    }
+                                    
+                                    if (matchingMoodOption != null) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = "Dominant Mood",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(matchingMoodOption.selectedColor)
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                    ) {
+                                                        Text(matchingMoodOption.emoji, fontSize = 10.sp)
+                                                        Text(
+                                                            text = matchingMoodOption.name,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = matchingMoodOption.primaryColor
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(CircleShape)
+                                                    .background(matchingMoodOption.primaryColor.copy(alpha = 0.12f))
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "$pct%",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = matchingMoodOption.primaryColor
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Emotional Health Guidance Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -999,43 +1514,7 @@ fun WellbeingTrendsDashboard(
 
 @Composable
 fun WellbeingTrendChart(entries: List<JournalEntry>, moods: List<MoodOption>) {
-    val sortedEntries = entries
-        .filter { it.moodTag != null }
-        .sortedBy { it.date }
-        .takeLast(7)
-
-    if (sortedEntries.size < 2) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Timeline,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    modifier = Modifier.size(40.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Awaiting More Daily Entries",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Track at least 2 entries with mood tags to visualize your emotional progression over time.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-        return
-    }
+    var selectedTimeframe by remember { mutableStateOf(1) } // 0 = 7 Entries, 1 = 30 Days
 
     val moodWeights = mapOf(
         "Radiant" to 5f,
@@ -1046,133 +1525,141 @@ fun WellbeingTrendChart(entries: List<JournalEntry>, moods: List<MoodOption>) {
         "Stressed" to 0f
     )
 
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val filteredEntries = remember(entries, selectedTimeframe) {
+        val withMood = entries.filter { it.moodTag != null }.sortedBy { it.date }
+        if (selectedTimeframe == 0) {
+            withMood.takeLast(7)
+        } else {
+            withMood.takeLast(30)
+        }
+    }
+
+    if (filteredEntries.size < 2) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(24.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Timeline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    modifier = Modifier.size(44.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Awaiting More Data",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Track at least 2 entries with mood tags to visualize your 30-day emotional progression.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
+
+    val chartEntryModel = remember(filteredEntries) {
+        val entries = filteredEntries.map { entry ->
+            moodWeights[entry.moodTag] ?: 3f
+        }
+        entryModelOf(*entries.toTypedArray())
+    }
+
+    val dateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd")
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("wellbeing_trend_chart_card"),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Emotional Health Progression (Last 7 Entries)",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            // Custom Canvas Chart
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val width = size.width
-                    val height = size.height
-                    val paddingLeft = 50f
-                    val paddingRight = 50f
-                    val paddingTop = 30f
-                    val paddingBottom = 40f
-
-                    val chartWidth = width - paddingLeft - paddingRight
-                    val chartHeight = height - paddingTop - paddingBottom
-
-                    // Draw 6 horizontal grid lines representing each mood score (0 to 5)
-                    for (i in 0..5) {
-                        val y = paddingTop + chartHeight * (1f - i / 5f)
-                        drawLine(
-                            color = primaryColor.copy(alpha = 0.08f),
-                            start = Offset(paddingLeft, y),
-                            end = Offset(width - paddingRight, y),
-                            strokeWidth = 2f
-                        )
-                    }
-
-                    // Draw points and curves
-                    val points = sortedEntries.mapIndexed { index, entry ->
-                        val moodValue = moodWeights[entry.moodTag] ?: 3f
-                        val x = paddingLeft + (chartWidth * (index.toFloat() / (sortedEntries.size - 1).coerceAtLeast(1)))
-                        val y = paddingTop + chartHeight * (1f - moodValue / 5f)
-                        Offset(x, y)
-                    }
-
-                    // Draw connections with smooth lines
-                    val path = Path().apply {
-                        if (points.isNotEmpty()) {
-                            moveTo(points[0].x, points[0].y)
-                            for (i in 1 until points.size) {
-                                val prev = points[i - 1]
-                                val curr = points[i]
-                                // Cubic control points for smooth curves
-                                val cx1 = prev.x + (curr.x - prev.x) / 2f
-                                val cy1 = prev.y
-                                val cx2 = prev.x + (curr.x - prev.x) / 2f
-                                val cy2 = curr.y
-                                cubicTo(cx1, cy1, cx2, cy2, curr.x, curr.y)
-                            }
-                        }
-                    }
-
-                    drawPath(
-                        path = path,
-                        color = primaryColor,
-                        style = Stroke(width = 6f, cap = StrokeCap.Round)
+                Column(modifier = Modifier.weight(0.6f)) {
+                    Text(
+                        text = "📈 Wellbeing Progression",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-
-                    // Draw points on top
-                    points.forEachIndexed { index, point ->
-                        val entry = sortedEntries[index]
-                        val moodOpt = moods.find { it.name == entry.moodTag }
-                        val dotColor = moodOpt?.primaryColor ?: primaryColor
-                        
-                        // Outer glowing circle
-                        drawCircle(
-                            color = dotColor.copy(alpha = 0.3f),
-                            radius = 16f,
-                            center = point
-                        )
-                        // Inner solid circle
-                        drawCircle(
-                            color = dotColor,
-                            radius = 8f,
-                            center = point
-                        )
-                    }
+                    Text(
+                        text = "Mood trends over time",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
                 }
 
-                // Overlay labels using absolute positions or Row/Box layouts
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .padding(start = 16.dp, end = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .wrapContentSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .padding(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    sortedEntries.forEach { entry ->
-                        val moodOpt = moods.find { it.name == entry.moodTag }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    listOf("7 Logs", "30 Days").forEachIndexed { idx, label ->
+                        val isSelected = selectedTimeframe == idx
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .clickable { selectedTimeframe = idx }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = moodOpt?.emoji ?: "💭",
-                                fontSize = 16.sp
-                            )
-                            val shortDate = try {
-                                val parts = entry.date.split("-")
-                                if (parts.size == 3) "${parts[1]}/${parts[2]}" else entry.date
-                            } catch (e: Exception) {
-                                entry.date
-                            }
-                            Text(
-                                text = shortDate,
-                                fontSize = 9.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                fontWeight = FontWeight.Medium
+                                text = label,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Chart(
+                chart = lineChart(),
+                model = chartEntryModel,
+                startAxis = rememberStartAxis(
+                    valueFormatter = { value, _ ->
+                        val weight = value.toInt()
+                        moodWeights.entries.find { it.value.toInt() == weight }?.key ?: ""
+                    }
+                ),
+                bottomAxis = rememberBottomAxis(
+                    valueFormatter = { value, _ ->
+                        val index = value.toInt()
+                        if (index >= 0 && index < filteredEntries.size) {
+                            try {
+                                val date = LocalDate.parse(filteredEntries[index].date)
+                                date.format(dateTimeFormatter)
+                            } catch (e: Exception) {
+                                ""
+                            }
+                        } else {
+                            ""
+                        }
+                    },
+                    labelRotationDegrees = -45f
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+            )
         }
     }
 }
@@ -1180,25 +1667,43 @@ fun WellbeingTrendChart(entries: List<JournalEntry>, moods: List<MoodOption>) {
 fun seedWellbeingHistory(viewModel: LunaViewModel) {
     val today = LocalDate.now()
     val titlesAndBodies = listOf(
-        Triple("Stressed Morning", "Felt highly anxious about the upcoming project review. Heart rate was slightly elevated. Spent 5 mins on deep abdominal breathing.", "Stressed"),
-        Triple("Quiet Afternoon", "Took a short walk outside under the sun. The breeze felt lovely on my face. Feeling a bit of mental fatigue releasing.", "Calm"),
-        Triple("Quiet Reflections", "Read a chapter of my book and drank warm chamomile tea. Felt peaceful and grounded.", "Peaceful"),
-        Triple("Restless Night", "Tossed and turned. Work anxiety kept me awake for hours. Need to limit screen time tonight.", "Tired"),
-        Triple("Gentle Reset", "Slept in a bit. Took a warm shower and ate a healthy breakfast. Feeling more stable today.", "Calm"),
-        Triple("Radiant Energy", "Had a great conversation with a friend. Shared some hearty laughs and felt a strong sense of belonging.", "Radiant"),
-        Triple("Low Focus", "Felt a bit sluggish and blue. Didn't get much done, but reminded myself that productivity doesn't define my worth.", "Low"),
-        Triple("Peaceful Solitude", "Spent the evening gardening. Connecting with the soil helped quiet my racing thoughts.", "Peaceful"),
-        Triple("Exhausted Evening", "Long day at the clinic/office. Tired physically but emotionally content. Excited for bed.", "Tired"),
-        Triple("Joyful Milestone", "Completed my personal goal for the week! Celebrated with a self-care evening. Feeling highly radiant and proud.", "Radiant")
+        Triple("Cozy Sunday Reset", "Woke up without an alarm. Made blueberry pancakes, read in bed, and listened to the peaceful rain outside. Heart feels exceptionally light.", "Peaceful"),
+        Triple("Stressed Monday Morning", "Felt highly anxious about the upcoming project review. Spent 5 mins on deep abdominal breathing loops. Feeling slightly stabilized.", "Stressed"),
+        Triple("Quiet Walk Outdoors", "Took a short walk outside under the sun. The breeze felt lovely on my face. Feeling a bit of mental fatigue releasing.", "Calm"),
+        Triple("Quiet Reflections", "Read a chapter of my book and drank warm chamomile tea. Felt peaceful and grounded in my cozy reading chair.", "Peaceful"),
+        Triple("Restless Night Struggles", "Tossed and turned. Work anxiety kept me awake for hours. Need to strictly limit screen time tonight.", "Tired"),
+        Triple("Gentle Morning Start", "Slept in a bit. Took a warm shower and ate a healthy breakfast. Feeling more stable and present today.", "Calm"),
+        Triple("Radiant Coffee Meetup", "Had an amazing conversation with a dear friend. Shared some hearty laughs and felt a strong, deep sense of belonging.", "Radiant"),
+        Triple("Low Focus Day", "Felt a bit sluggish and blue. Didn't get much done, but reminded myself that productivity doesn't define my worth.", "Low"),
+        Triple("Peaceful Solitude", "Spent the evening gardening and planting herbs. Connecting with the soil helped quiet my racing thoughts.", "Peaceful"),
+        Triple("Productive Breakthrough", "Completed my personal goal for the week! Celebrated with a self-care evening. Feeling highly radiant and proud of the progress.", "Radiant"),
+        Triple("Cozy Rainy Reading", "Rainy afternoon perfect for hot tea and fiction. Allowed myself to fully disconnect from notifications.", "Peaceful"),
+        Triple("Midweek Overwhelmed", "Inbox is overflowing. Feeling pulling in too many directions. Scheduled a deep breathing block.", "Stressed"),
+        Triple("Mindful Evening Yoga", "Did a gentle 15-minute restorative yoga flow. Stretched out back tension. Sleeping much better tonight.", "Calm"),
+        Triple("Sluggish Afternoon slump", "Felt a bit of brain fog and slow cognitive speed. Stepped away to stretch and hydrate.", "Tired"),
+        Triple("Deep Heart-to-Heart", "Had a highly authentic call with family. Feeling very emotionally supported and peaceful.", "Peaceful"),
+        Triple("Stunning Golden Sunset", "Walked around the park during sunset. Sky was a brilliant shade of purple and orange. Nature is medicine.", "Radiant"),
+        Triple("Slow Creative Evening", "Sketched for an hour while listening to ambient music. No goals, just pure visual expression.", "Calm"),
+        Triple("Restful Deep Sleep", "Slept a solid 8.5 hours. Energy levels are elevated today! Ready to conquer the tasks ahead.", "Radiant")
     )
     
     titlesAndBodies.forEachIndexed { index, (title, body, mood) ->
-        val dateStr = today.minusDays((10 - index).toLong()).toString()
+        val dateStr = today.minusDays((24 - index).toLong()).toString()
+        val category = when (mood) {
+            "Radiant" -> "Self-Care"
+            "Peaceful" -> "Reflection"
+            "Calm" -> "Self-Care"
+            "Tired" -> "Symptoms"
+            "Stressed" -> "Mental Health"
+            "Low" -> "Reflection"
+            else -> "General"
+        }
         viewModel.addJournalEntryWithDate(
             date = dateStr,
             title = title,
             body = body,
-            moodTag = mood
+            moodTag = mood,
+            category = category
         )
     }
 }
@@ -1208,4 +1713,20 @@ data class MoodOption(
     val emoji: String,
     val primaryColor: Color,
     val selectedColor: Color
+)
+
+data class JournalCategory(
+    val name: String,
+    val emoji: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val color: Color
+)
+
+val journalCategories = listOf(
+    JournalCategory("General", "📝", Icons.Default.Edit, Color(0xFF6B7280)), // Slate gray
+    JournalCategory("Self-Care", "🌸", Icons.Default.Spa, Color(0xFFE27396)), // Rose/pink
+    JournalCategory("Mental Health", "🧠", Icons.Default.CheckCircle, Color(0xFF4A90E2)), // Bright Blue
+    JournalCategory("Symptoms", "🤒", Icons.Default.Timeline, Color(0xFFE07A5F)), // Coral/Orange
+    JournalCategory("Gratitude", "✨", Icons.Default.Favorite, Color(0xFFD6A045)), // Gold/Amber
+    JournalCategory("Reflection", "💭", Icons.Default.MenuBook, Color(0xFF81B29A)) // Sage Green
 )

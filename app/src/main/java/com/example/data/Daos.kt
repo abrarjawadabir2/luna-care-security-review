@@ -138,3 +138,49 @@ interface SymptomLogDao {
     suspend fun deleteSymptomLog(id: Int)
 }
 
+@Dao
+interface UserCredentialsDao {
+    @Query("SELECT * FROM user_credentials WHERE emailHash = :emailHash LIMIT 1")
+    suspend fun getCredentialsByHash(emailHash: String): UserCredentials?
+
+    @Query("SELECT * FROM user_credentials WHERE isLoggedIn = 1 LIMIT 1")
+    fun getLoggedInCredentialsFlow(): Flow<UserCredentials?>
+
+    @Query("SELECT * FROM user_credentials WHERE isLoggedIn = 1 LIMIT 1")
+    suspend fun getLoggedInCredentialsSync(): UserCredentials?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCredentials(credentials: UserCredentials)
+
+    @Query("UPDATE user_credentials SET isLoggedIn = 0")
+    suspend fun logoutAll()
+
+    @Query("UPDATE user_credentials SET isLoggedIn = 1 WHERE emailHash = :emailHash")
+    suspend fun loginUser(emailHash: String)
+
+    @Query("DELETE FROM user_credentials")
+    suspend fun deleteAllCredentials()
+}
+
+@Dao
+interface LoginSecurityEventDao {
+    @Query("SELECT * FROM login_security_events ORDER BY createdAt DESC")
+    fun getAllSecurityEvents(): Flow<List<LoginSecurityEvent>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSecurityEvent(event: LoginSecurityEvent)
+}
+
+@Dao
+interface AccountSecurityStateDao {
+    @Query("SELECT * FROM account_security_state WHERE emailHash = :emailHash LIMIT 1")
+    suspend fun getSecurityState(emailHash: String): AccountSecurityState?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSecurityState(state: AccountSecurityState)
+
+    @Query("DELETE FROM account_security_state WHERE emailHash = :emailHash")
+    suspend fun deleteSecurityState(emailHash: String)
+}
+
+

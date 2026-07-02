@@ -61,12 +61,19 @@ fun LunaCareApp(viewModel: LunaViewModel) {
     val profileState by viewModel.profile.collectAsState()
     val isPinAuthenticated by viewModel.isPinAuthenticated.collectAsState()
     val showCrisisScreen by viewModel.showCrisisScreen.collectAsState()
+    val loggedInCredentials by viewModel.loggedInCredentials.collectAsState()
+    val isGuestUser by viewModel.isGuestUser.collectAsState()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
         when {
+            // 0. If NOT logged in and NOT in Guest mode -> Show Auth Screen
+            loggedInCredentials == null && !isGuestUser -> {
+                AuthScreen(viewModel = viewModel)
+            }
+
             // 1. If Profile is not set up -> Show Onboarding Screen
             profileState == null -> {
                 OnboardingScreen(onCompleted = { name, birthYear, cycleLength, periodLength, goals, pin, userMode, genderMode, bodyRelevantMode, supportRel, consent, sharedTrackingConsent, behaviourFocuses, medRem, waterRem ->
@@ -1407,10 +1414,14 @@ fun DashboardTab(
                                         Text("Set Start Date")
                                     }
                                 } else {
-                                    val cycleDay = CycleUtils.getCurrentCycleDay(lastLog.startDate, todayStr)
-                                    val predictedStart = CycleUtils.getPredictedNextPeriod(lastLog.startDate, profile.averageCycleLength)
-                                    val daysUntil = CycleUtils.getDaysBetween(todayStr, predictedStart)
-                                    val phase = CycleUtils.getCyclePhase(cycleDay, profile.averageCycleLength, profile.averagePeriodLength)
+                                    val prediction = CycleUtils.predictNextPeriod(
+                                        periodLogs = periodLogs,
+                                        profileAverageLength = profile.averageCycleLength,
+                                        profilePeriodLength = profile.averagePeriodLength,
+                                        today = java.time.LocalDate.now()
+                                    )
+                                    val cycleDay = prediction.currentCycleDay ?: 1
+                                    val phase = prediction.phase
 
                                     Text(
                                         text = phase.uppercase(),
@@ -1453,7 +1464,7 @@ fun DashboardTab(
                                                 lineHeight = 44.sp
                                             )
                                             Text(
-                                                text = "of ${profile.averageCycleLength}",
+                                                text = "of ${prediction.predictedCycleLength}",
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -1463,17 +1474,90 @@ fun DashboardTab(
 
                                     Spacer(modifier = Modifier.height(16.dp))
 
-                                    Text(
-                                        text = if (daysUntil > 0) "Next period in $daysUntil days" else "Period predicted expected today!",
-                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
-                                    )
+                                    // Predictions based on engine
+                                    val daysUntil = prediction.daysUntil
+                                    if (prediction.isOverdue) {
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.padding(horizontal = 12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text("⚠️", fontSize = 16.sp)
+                                                Text(
+                                                    text = "Cycle Day $cycleDay • Period Overdue by ${prediction.overdueDays} days",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Text(
+                                            text = when {
+                                                daysUntil == null -> "Calculating predictions..."
+                                                daysUntil < 0 -> "Period expected very soon"
+                                                daysUntil == 0L -> "Period predicted to start today!"
+                                                daysUntil == 1L -> "Period predicted tomorrow!"
+                                                else -> "Next period in $daysUntil days"
+                                            },
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        
+                                        if (prediction.nextPeriodDate != null) {
+                                            Text(
+                                                text = "Estimated Start: ${CycleUtils.formatDisplayDate(prediction.nextPeriodDate)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Engine microcopy / details badge
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 10.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (prediction.isBasedOnHistory) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                            )
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (prediction.isBasedOnHistory) "✨" else "ℹ️",
+                                                fontSize = 11.sp
+                                            )
+                                            Text(
+                                                text = if (prediction.isBasedOnHistory) {
+                                                    "Historical Engine: ${prediction.predictedCycleLength}-day avg (from ${prediction.historicalCycleCount} logged cycles)"
+                                                } else {
+                                                    "Profile default: ${prediction.predictedCycleLength}-day cycle (log more periods to enable engine)"
+                                                },
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (prediction.isBasedOnHistory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
 
                                     Text(
                                         text = CycleUtils.getPhaseDescription(phase),
                                         style = MaterialTheme.typography.bodySmall,
                                         textAlign = TextAlign.Center,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                        modifier = Modifier.padding(top = 8.dp)
+                                        modifier = Modifier.padding(top = 12.dp)
                                     )
                                 }
                             }
@@ -1828,10 +1912,14 @@ fun DashboardTab(
                                     Text("Log Partner Period Start")
                                 }
                             } else {
-                                val cycleDay = CycleUtils.getCurrentCycleDay(lastLog.startDate, todayStr)
-                                val predictedStart = CycleUtils.getPredictedNextPeriod(lastLog.startDate, profile.averageCycleLength)
-                                val daysUntil = CycleUtils.getDaysBetween(todayStr, predictedStart)
-                                val phase = CycleUtils.getCyclePhase(cycleDay, profile.averageCycleLength, profile.averagePeriodLength)
+                                val prediction = CycleUtils.predictNextPeriod(
+                                    periodLogs = periodLogs,
+                                    profileAverageLength = profile.averageCycleLength,
+                                    profilePeriodLength = profile.averagePeriodLength,
+                                    today = java.time.LocalDate.now()
+                                )
+                                val cycleDay = prediction.currentCycleDay ?: 1
+                                val phase = prediction.phase
 
                                 Text(
                                     text = "COMPANION'S ACTIVE CYCLE STATUS",
@@ -1874,7 +1962,7 @@ fun DashboardTab(
                                             lineHeight = 44.sp
                                         )
                                         Text(
-                                            text = "Predicted Phase",
+                                            text = "of ${prediction.predictedCycleLength}",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -1891,14 +1979,87 @@ fun DashboardTab(
                                 )
 
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = if (daysUntil > 0) "Partner's next cycle estimated in $daysUntil days." else "Partner's cycle predicted to start today!",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                
+                                val daysUntil = prediction.daysUntil
+                                if (prediction.isOverdue) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                                        ),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text("⚠️", fontSize = 14.sp)
+                                            Text(
+                                                text = "Companion's period is late by ${prediction.overdueDays} days",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = when {
+                                            daysUntil == null -> "Calculating companion predictions..."
+                                            daysUntil < 0 -> "Companion's period expected very soon."
+                                            daysUntil == 0L -> "Companion's period predicted to start today!"
+                                            daysUntil == 1L -> "Companion's period predicted tomorrow!"
+                                            else -> "Companion's next cycle estimated in $daysUntil days."
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    
+                                    if (prediction.nextPeriodDate != null) {
+                                        Text(
+                                            text = "Estimated Start: ${CycleUtils.formatDisplayDate(prediction.nextPeriodDate)}",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f),
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(top = 1.dp)
+                                        )
+                                    }
+                                }
 
-                                Spacer(modifier = Modifier.height(8.dp))
+                                // Engine microcopy / details badge
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 8.dp, bottom = 8.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (prediction.isBasedOnHistory) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = if (prediction.isBasedOnHistory) "✨" else "ℹ",
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = if (prediction.isBasedOnHistory) {
+                                                "Historical Engine: ${prediction.predictedCycleLength}-day avg (from ${prediction.historicalCycleCount} logged cycles)"
+                                            } else {
+                                                "Profile default: ${prediction.predictedCycleLength}-day cycle (log more periods to enable engine)"
+                                            },
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (prediction.isBasedOnHistory) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 // Tailored Support Advice based on phase
                                 val supportAdvice = when (phase) {
@@ -4881,6 +5042,99 @@ fun SettingsTab(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Clear Tracked Journey", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Account Session & Security Audit Log Card
+        val securityEvents by viewModel.securityEvents.collectAsState()
+        val loggedInCreds by viewModel.loggedInCredentials.collectAsState()
+        val isGuest by viewModel.isGuestUser.collectAsState()
+
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("session_security_card")
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Account Session & Security Audit 🛡️", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(0.7f)) {
+                        val accountText = if (isGuest) {
+                            "Guest Mode (Offline Only)"
+                        } else if (loggedInCreds != null) {
+                            val plainEmail = EncryptionHelper.decryptSensitiveText(loggedInCreds?.encryptedEmail) ?: ""
+                            "Logged in as ${EncryptionHelper.maskEmail(plainEmail)}"
+                        } else {
+                            "Not Authenticated"
+                        }
+                        Text(accountText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        Text("Your active session state.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    
+                    Button(
+                        onClick = { viewModel.logout() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.testTag("logout_button")
+                    ) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Logout", fontSize = 12.sp)
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text("Recent Security Audit Events:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                if (securityEvents.isEmpty()) {
+                    Text("No security events logged yet.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 120.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        securityEvents.forEach { event ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(0.7f)) {
+                                    Text(
+                                        text = event.eventType,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = when(event.eventType) {
+                                            "LOGIN_SUCCESS", "PASSWORD_RESET_SUCCESS" -> Color(0xFF2E7D32)
+                                            "LOGIN_FAILED", "ACCOUNT_LOCKED_TEMPORARILY", "RATE_LIMIT_TRIGGERED" -> MaterialTheme.colorScheme.error
+                                            else -> MaterialTheme.colorScheme.secondary
+                                        }
+                                    )
+                                    Text(
+                                        text = event.metadata ?: "",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                val eventTime = java.time.Instant.ofEpochMilli(event.createdAt)
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toLocalTime()
+                                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                                Text(
+                                    text = eventTime,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
                         }
                     }
                 }

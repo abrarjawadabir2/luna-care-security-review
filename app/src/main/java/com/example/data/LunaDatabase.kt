@@ -18,9 +18,12 @@ import androidx.room.TypeConverters
         BehaviourLog::class,
         CupCareLog::class,
         SupportNote::class,
-        SymptomLog::class
+        SymptomLog::class,
+        UserCredentials::class,
+        LoginSecurityEvent::class,
+        AccountSecurityState::class
     ],
-    version = 4,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +39,9 @@ abstract class LunaDatabase : RoomDatabase() {
     abstract fun cupCareLogDao(): CupCareLogDao
     abstract fun supportNoteDao(): SupportNoteDao
     abstract fun symptomLogDao(): SymptomLogDao
+    abstract fun userCredentialsDao(): UserCredentialsDao
+    abstract fun loginSecurityEventDao(): LoginSecurityEventDao
+    abstract fun accountSecurityStateDao(): AccountSecurityStateDao
 
     companion object {
         @Volatile
